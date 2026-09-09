@@ -40,6 +40,8 @@
   let host = null
   let shadow = null
   let elements = null
+  let accountPageObserver = null
+  let accountPageAccounts = []
 
   const CSS = String.raw`
     :host { all: initial; }
@@ -163,9 +165,6 @@
     .account-row input[type="checkbox"] { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 2px; accent-color: #2563eb; }
     .account-main { min-width: 0; flex: 1; }
     .account-name { display: flex; align-items: center; gap: 6px; min-width: 0; color: #1e293b; font-weight: 600; }
-    .copy-buttons { display: inline-flex; gap: 3px; flex: 0 0 auto; }
-    .copy-button { width: 22px; height: 20px; padding: 0; border: 1px solid #dbe3ec; border-radius: 4px; background: #fff; color: #64748b; font-size: 10px; line-height: 1; }
-    .copy-button:hover { border-color: #93b4f4; background: #eff6ff; color: #2563eb; }
     .account-name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .account-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 2px; color: #64748b; font-size: 11px; }
     .badge { display: inline-flex; align-items: center; padding: 1px 5px; border: 1px solid #dbe3ec; border-radius: 4px; background: #f8fafc; color: #64748b; font-size: 10px; }
@@ -782,19 +781,6 @@
     name.className = 'account-name'
     const nameText = document.createElement('span')
     nameText.textContent = asString(account.name) || `账号 ${account.id}`
-    const copyButtons = document.createElement('span')
-    copyButtons.className = 'copy-buttons'
-    for (const [label, title, value] of [['URL', '复制 API URL', base], ['Key', '复制 API Key', key]]) {
-      const button = document.createElement('button')
-      button.className = 'copy-button'
-      button.type = 'button'
-      button.title = title
-      button.textContent = label
-      button.disabled = !value || value === '默认地址'
-      button.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); copyText(value, button) })
-      copyButtons.appendChild(button)
-    }
-    name.appendChild(copyButtons)
     name.appendChild(nameText)
     const status = document.createElement('span')
     status.className = `badge ${account.status === 'active' ? 'ok' : 'off'}`
@@ -1029,6 +1015,46 @@
   function syncRoute() {
     if (isAdminRoute() && looksLikeSub2API()) ensureHost()
     else removeHost()
+    if (isAdminRoute() && /\/admin\/accounts(?:\/|$)/i.test(window.location.pathname)) ensureAccountPageButtons()
+    else removeAccountPageButtons()
+  }
+
+  function removeAccountPageButtons() {
+    accountPageObserver?.disconnect()
+    accountPageObserver = null
+    accountPageAccounts = []
+    document.querySelectorAll('[data-sub2api-copy-buttons]').forEach((node) => node.remove())
+  }
+
+  async function ensureAccountPageButtons() {
+    if (accountPageObserver) return
+    try { accountPageAccounts = await listAccounts(false) } catch { return }
+    const inject = () => {
+      for (const row of document.querySelectorAll('tbody tr')) {
+        if (row.querySelector('[data-sub2api-copy-buttons]')) continue
+        const account = accountPageAccounts.find((item) => row.textContent.includes(asString(item.name)))
+        if (!account) continue
+        const credentials = asRecord(account.credentials)
+        const values = [['URL', '复制 API URL', asString(credentials.base_url)], ['Key', '复制 API Key', asString(credentials.api_key)]]
+        const target = [...row.querySelectorAll('td')].find((cell) => cell.textContent.includes(asString(account.name)))
+        if (!target) continue
+        const buttons = document.createElement('span')
+        buttons.dataset.sub2apiCopyButtons = 'true'
+        buttons.style.cssText = 'display:inline-flex;gap:3px;margin-right:5px;vertical-align:middle'
+        for (const [label, title, value] of values) {
+          const button = document.createElement('button')
+          button.type = 'button'; button.title = title; button.textContent = label
+          button.style.cssText = 'padding:1px 4px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#475569;font-size:10px;line-height:16px;cursor:pointer'
+          button.disabled = !value
+          button.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); copyText(value, button) })
+          buttons.appendChild(button)
+        }
+        target.prepend(buttons)
+      }
+    }
+    inject()
+    accountPageObserver = new MutationObserver(inject)
+    accountPageObserver.observe(document.body, { childList: true, subtree: true })
   }
 
   let syncFrame = 0

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub2API 运维工具箱
 // @namespace    https://github.com/Wei-Shaw/sub2api
-// @version      0.1.2
+// @version      0.1.3
 // @updateURL    https://raw.githubusercontent.com/BeiPoer/sub2api-script/main/sub2api-model-toolbox.user.js
 // @downloadURL  https://raw.githubusercontent.com/BeiPoer/sub2api-script/main/sub2api-model-toolbox.user.js
 // @description  在 Sub2API 管理员页面直接测试 API Key 上游账号

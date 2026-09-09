@@ -34,7 +34,8 @@
     selected: new Set(),
     results: [],
     quickAccounts: [],
-    quickLoading: false
+    quickLoading: false,
+    quickEnabled: false
   }
 
   let host = null
@@ -928,10 +929,12 @@
       if (!state.initialized) loadData(false)
     })
     elements.quickTool.addEventListener('click', () => {
+      state.quickEnabled = true
       elements.menu.hidden = true
       elements.testView.hidden = true
       elements.quickView.hidden = false
       loadQuickAccounts()
+      ensureAccountPageButtons()
     })
     elements.back.addEventListener('click', () => {
       if (state.running) return
@@ -1015,7 +1018,7 @@
   function syncRoute() {
     if (isAdminRoute() && looksLikeSub2API()) ensureHost()
     else removeHost()
-    if (isAdminRoute() && /\/admin\/accounts(?:\/|$)/i.test(window.location.pathname)) ensureAccountPageButtons()
+    if (state.quickEnabled && isAdminRoute() && /\/admin\/accounts(?:\/|$)/i.test(window.location.pathname)) ensureAccountPageButtons()
     else removeAccountPageButtons()
   }
 
@@ -1023,6 +1026,7 @@
     accountPageObserver?.disconnect()
     accountPageObserver = null
     accountPageAccounts = []
+    state.quickEnabled = false
     document.querySelectorAll('[data-sub2api-copy-buttons]').forEach((node) => node.remove())
   }
 

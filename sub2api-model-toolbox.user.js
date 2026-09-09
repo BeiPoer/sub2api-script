@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub2API 运维工具箱
 // @namespace    https://github.com/Wei-Shaw/sub2api
-// @version      0.1.3
+// @version      0.1.4
 // @updateURL    https://raw.githubusercontent.com/BeiPoer/sub2api-script/main/sub2api-model-toolbox.user.js
 // @downloadURL  https://raw.githubusercontent.com/BeiPoer/sub2api-script/main/sub2api-model-toolbox.user.js
 // @description  在 Sub2API 管理员页面直接测试 API Key 上游账号
@@ -227,10 +227,6 @@
             </div>
             <div class="notice" id="notice"></div>
             <div class="results" id="results"></div>
-          </div>
-          <div class="test-view" id="quick-view" hidden>
-            <div class="view-header"><button class="icon-button" id="quick-back" type="button" title="返回工具箱" aria-label="返回工具箱">←</button><strong>渠道 URL + Key</strong><span class="spacer"></span><button class="icon-button" id="quick-refresh" type="button" title="刷新账号" aria-label="刷新账号">↻</button></div>
-            <div class="account-list" id="quick-accounts"></div>
           </div>
         </div>
       </section>
@@ -902,11 +898,8 @@
       modelTool: shadow.getElementById('model-tool'),
       quickTool: shadow.getElementById('quick-tool'),
       testView: shadow.getElementById('test-view'),
-      quickView: shadow.getElementById('quick-view'),
       back: shadow.getElementById('back'),
-      quickBack: shadow.getElementById('quick-back'),
       refresh: shadow.getElementById('refresh'),
-      quickRefresh: shadow.getElementById('quick-refresh'),
       reload: shadow.getElementById('reload'),
       group: shadow.getElementById('group'),
       schedule: shadow.getElementById('schedule'),
@@ -914,7 +907,6 @@
       selectAll: shadow.getElementById('select-all'),
       clearSelection: shadow.getElementById('clear-selection'),
       accounts: shadow.getElementById('accounts'),
-      quickAccounts: shadow.getElementById('quick-accounts'),
       model: shadow.getElementById('model'),
       test: shadow.getElementById('test'),
       notice: shadow.getElementById('notice'),
@@ -930,23 +922,15 @@
     })
     elements.quickTool.addEventListener('click', () => {
       state.quickEnabled = true
-      elements.menu.hidden = true
-      elements.testView.hidden = true
-      elements.quickView.hidden = false
-      loadQuickAccounts()
       ensureAccountPageButtons()
+      setOpen(false)
     })
     elements.back.addEventListener('click', () => {
       if (state.running) return
       elements.testView.hidden = true
       elements.menu.hidden = false
     })
-    elements.quickBack.addEventListener('click', () => {
-      elements.quickView.hidden = true
-      elements.menu.hidden = false
-    })
     elements.refresh.addEventListener('click', () => loadData(true))
-    elements.quickRefresh.addEventListener('click', loadQuickAccounts)
     elements.reload.addEventListener('click', () => loadData(true))
     elements.group.addEventListener('change', () => {
       state.groupId = elements.group.value

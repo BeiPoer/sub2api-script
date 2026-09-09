@@ -32,7 +32,9 @@
     groupId: '',
     schedule: 'on',
     selected: new Set(),
-    results: []
+    results: [],
+    quickAccounts: [],
+    quickLoading: false
   }
 
   let host = null
@@ -161,6 +163,9 @@
     .account-row input[type="checkbox"] { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 2px; accent-color: #2563eb; }
     .account-main { min-width: 0; flex: 1; }
     .account-name { display: flex; align-items: center; gap: 6px; min-width: 0; color: #1e293b; font-weight: 600; }
+    .copy-buttons { display: inline-flex; gap: 3px; flex: 0 0 auto; }
+    .copy-button { width: 22px; height: 20px; padding: 0; border: 1px solid #dbe3ec; border-radius: 4px; background: #fff; color: #64748b; font-size: 10px; line-height: 1; }
+    .copy-button:hover { border-color: #93b4f4; background: #eff6ff; color: #2563eb; }
     .account-name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .account-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 2px; color: #64748b; font-size: 11px; }
     .badge { display: inline-flex; align-items: center; padding: 1px 5px; border: 1px solid #dbe3ec; border-radius: 4px; background: #f8fafc; color: #64748b; font-size: 10px; }
@@ -200,6 +205,7 @@
         <div class="panel-body">
           <div class="menu" id="menu">
             <button class="tool-button" id="model-tool" type="button"><span class="tool-glyph">◇</span><span>模型测试</span></button>
+            <button class="tool-button" id="quick-tool" type="button"><span class="tool-glyph">⧉</span><span>快速获取渠道 URL + Key</span></button>
           </div>
           <div class="test-view" id="test-view" hidden>
             <div class="view-header">
@@ -221,6 +227,10 @@
             </div>
             <div class="notice" id="notice"></div>
             <div class="results" id="results"></div>
+          </div>
+          <div class="test-view" id="quick-view" hidden>
+            <div class="view-header"><button class="icon-button" id="quick-back" type="button" title="返回工具箱" aria-label="返回工具箱">←</button><strong>渠道 URL + Key</strong><span class="spacer"></span><button class="icon-button" id="quick-refresh" type="button" title="刷新账号" aria-label="刷新账号">↻</button></div>
+            <div class="account-list" id="quick-accounts"></div>
           </div>
         </div>
       </section>
@@ -599,13 +609,13 @@
     }
   }
 
-  async function listAccounts() {
+  async function listAccounts(filterGroup = true) {
     const accounts = []
     let page = 1
     let pages = 1
     do {
       const params = { type: 'apikey', page: String(page), page_size: String(PAGE_SIZE), sort_by: 'name', sort_order: 'asc' }
-      if (state.groupId) params.group = state.groupId
+      if (filterGroup && state.groupId) params.group = state.groupId
       const payload = asRecord(await adminGet('/admin/accounts', params))
       const items = Array.isArray(payload.items) ? payload.items : []
       accounts.push(...items)
@@ -704,11 +714,55 @@
     updateControls()
   }
 
-  function accountRow(account) {
+  function renderQuickAccounts() {
+    if (!elements) return
+    elements.quickAccounts.replaceChildren()
+    if (state.quickLoading) {
+      const loading = document.createElement('div')
+      loading.className = 'empty'
+      loading.textContent = '正在加载…'
+      elements.quickAccounts.appendChild(loading)
+    } else if (!state.quickAccounts.length) {
+      const empty = document.createElement('div')
+      empty.className = 'empty'
+      empty.textContent = '没有 API Key 账号'
+      elements.quickAccounts.appendChild(empty)
+    } else {
+      for (const account of state.quickAccounts) elements.quickAccounts.appendChild(accountRow(account, true))
+    }
+  }
+
+  async function loadQuickAccounts() {
+    if (state.quickLoading) return
+    state.quickLoading = true
+    renderQuickAccounts()
+    try { state.quickAccounts = await listAccounts(false) } catch { state.quickAccounts = [] }
+    state.quickLoading = false
+    renderQuickAccounts()
+  }
+
+  async function copyText(text, button) {
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const input = document.createElement('textarea')
+      input.value = text
+      document.body.appendChild(input)
+      input.select()
+      document.execCommand('copy')
+      input.remove()
+    }
+    const old = button.textContent
+    button.textContent = '✓'
+    setTimeout(() => { button.textContent = old }, 900)
+  }
+
+  function accountRow(account, quick = false) {
     const credentials = asRecord(account.credentials)
     const key = asString(credentials.api_key)
     const base = asString(credentials.base_url) || (asString(account.platform).toLowerCase() !== 'antigravity' ? '默认地址' : '')
-    const row = document.createElement('label')
+    const row = document.createElement(quick ? 'div' : 'label')
     row.className = 'account-row'
     const checkbox = document.createElement('input')
     checkbox.type = 'checkbox'
@@ -720,7 +774,7 @@
       else state.selected.delete(id)
       renderAccounts()
     })
-    row.appendChild(checkbox)
+    if (!quick) row.appendChild(checkbox)
 
     const main = document.createElement('div')
     main.className = 'account-main'
@@ -728,6 +782,19 @@
     name.className = 'account-name'
     const nameText = document.createElement('span')
     nameText.textContent = asString(account.name) || `账号 ${account.id}`
+    const copyButtons = document.createElement('span')
+    copyButtons.className = 'copy-buttons'
+    for (const [label, title, value] of [['URL', '复制 API URL', base], ['Key', '复制 API Key', key]]) {
+      const button = document.createElement('button')
+      button.className = 'copy-button'
+      button.type = 'button'
+      button.title = title
+      button.textContent = label
+      button.disabled = !value || value === '默认地址'
+      button.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); copyText(value, button) })
+      copyButtons.appendChild(button)
+    }
+    name.appendChild(copyButtons)
     name.appendChild(nameText)
     const status = document.createElement('span')
     status.className = `badge ${account.status === 'active' ? 'ok' : 'off'}`
@@ -846,9 +913,13 @@
       collapse: shadow.getElementById('collapse'),
       menu: shadow.getElementById('menu'),
       modelTool: shadow.getElementById('model-tool'),
+      quickTool: shadow.getElementById('quick-tool'),
       testView: shadow.getElementById('test-view'),
+      quickView: shadow.getElementById('quick-view'),
       back: shadow.getElementById('back'),
+      quickBack: shadow.getElementById('quick-back'),
       refresh: shadow.getElementById('refresh'),
+      quickRefresh: shadow.getElementById('quick-refresh'),
       reload: shadow.getElementById('reload'),
       group: shadow.getElementById('group'),
       schedule: shadow.getElementById('schedule'),
@@ -856,6 +927,7 @@
       selectAll: shadow.getElementById('select-all'),
       clearSelection: shadow.getElementById('clear-selection'),
       accounts: shadow.getElementById('accounts'),
+      quickAccounts: shadow.getElementById('quick-accounts'),
       model: shadow.getElementById('model'),
       test: shadow.getElementById('test'),
       notice: shadow.getElementById('notice'),
@@ -866,14 +938,26 @@
     elements.modelTool.addEventListener('click', () => {
       elements.menu.hidden = true
       elements.testView.hidden = false
+      elements.quickView.hidden = true
       if (!state.initialized) loadData(false)
+    })
+    elements.quickTool.addEventListener('click', () => {
+      elements.menu.hidden = true
+      elements.testView.hidden = true
+      elements.quickView.hidden = false
+      loadQuickAccounts()
     })
     elements.back.addEventListener('click', () => {
       if (state.running) return
       elements.testView.hidden = true
       elements.menu.hidden = false
     })
+    elements.quickBack.addEventListener('click', () => {
+      elements.quickView.hidden = true
+      elements.menu.hidden = false
+    })
     elements.refresh.addEventListener('click', () => loadData(true))
+    elements.quickRefresh.addEventListener('click', loadQuickAccounts)
     elements.reload.addEventListener('click', () => loadData(true))
     elements.group.addEventListener('change', () => {
       state.groupId = elements.group.value

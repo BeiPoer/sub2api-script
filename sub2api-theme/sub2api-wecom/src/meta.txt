@@ -1,0 +1,12 @@
+// ==UserScript==
+// @name         Sub2API · 企业微信管理工作台
+// @namespace    sub2api-wecom
+// @version      2.3.0
+// @description  企业微信会话式管理：原生筛选内联到单行工具栏，默认隐藏内容、hover 显示并保留占位；保留分页排序和记录操作。
+// @match        http://*/*
+// @match        https://*/*
+// @grant        GM_registerMenuCommand
+// @run-at       document-idle
+// @noframes
+// @license      MIT
+// ==/UserScript==

@@ -1,0 +1,11 @@
+import { readFile, readdir, writeFile } from 'node:fs/promises';
+const root = new URL('../', import.meta.url);
+const read = (path) => readFile(new URL(path, root), 'utf8');
+const [meta, baseCSS, conversationCSS, toolCSS, inlineCSS, avatars, inlineTools, nativeTools, bridge, js] = await Promise.all([read('src/meta.txt'), read('src/theme.css'), read('src/conversations.css'), read('src/native-tools.css'), read('src/inline-toolbar.css'), read('src/avatars.js'), read('src/inline-toolbar.js'), read('src/native-tools.js'), read('src/conversations.js'), read('src/theme.js')]);
+const mime = {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',gif:'image/gif'};
+const avatarFiles = (await readdir(new URL('avator/', root), {withFileTypes:true})).filter(e=>e.isFile() && /\.(png|jpe?g|webp|gif)$/i.test(e.name)).map(e=>e.name).sort((a,b)=>a.localeCompare(b,'en',{numeric:true}));
+if(!avatarFiles.length) throw new Error('avator/ 中没有支持的头像图片');
+const avatarImages = await Promise.all(avatarFiles.map(async name=>({name,src:`data:${mime[name.split('.').pop().toLowerCase()]};base64,${(await readFile(new URL('avator/'+encodeURIComponent(name),root))).toString('base64')}`})));
+const output = `${meta}\n// Visual reference: Linux DO IM / czm15053 (MIT). See THIRD_PARTY_NOTICES.md.\n(() => {\n'use strict';\nconst AVATAR_IMAGES = ${JSON.stringify(avatarImages)};\nconst THEME_CSS = ${JSON.stringify(baseCSS+'\n'+conversationCSS+'\n'+toolCSS+'\n'+inlineCSS)};\n${avatars}\n${inlineTools}\n${nativeTools}\n${bridge}\n${js}\n})();\n`;
+await writeFile(new URL('sub2api-wecom.user.js', root), output);
+console.log(`Built sub2api-wecom.user.js (${Buffer.byteLength(output)} bytes, ${avatarImages.length} embedded avatars)`);

@@ -1,0 +1,34 @@
+/* One reserved toolbar row: conceal its content, never collapse its layout. */
+.s2wc-native-toolbar{height:48px!important;min-height:48px!important;max-height:48px!important;flex-wrap:nowrap!important;padding:4px 6px!important;gap:4px!important;position:relative;overflow:visible!important}
+.s2wc-toolbar-scroll{display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:40px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-x:contain}
+.s2wc-toolbar-scroll::-webkit-scrollbar{display:none}
+.s2wc-toolbar-fields{display:flex;align-items:center;gap:8px;flex:0 0 auto;height:32px}
+.s2wc-native-control-slot{display:block;flex:0 0 auto;height:32px}
+.s2wc-native-toolbar :is(.s2wc-native-tabs,.s2wc-native-sort,.s2wc-native-selection){flex:0 0 auto;flex-wrap:nowrap}
+.s2wc-toolbar-arrow{width:22px;height:32px;flex:0 0 22px;border:0;background:transparent;color:var(--wc-text-3);font-size:23px!important;padding:0}
+.s2wc-toolbar-scroll>.s2wc-toolbar-local-search{flex:0 0 310px;width:310px;max-width:310px;border:0!important;padding:0!important;flex-wrap:nowrap;gap:6px}
+.s2wc-toolbar-local-search .s2wc-im-search-count,.s2wc-toolbar-local-search .s2wc-im-native-search-link{display:none!important}
+.s2wc-toolbar-local-search>label{min-width:0;max-width:none;flex-basis:auto}
+.s2wc-native-toolbar>.s2wc-toolbar-arrow,.s2wc-toolbar-scroll>*{opacity:0;pointer-events:none;transition:opacity .12s ease}
+.s2wc-native-toolbar:hover>.s2wc-toolbar-arrow,.s2wc-native-toolbar:focus-within>.s2wc-toolbar-arrow,html.s2wc-toolbar-revealed .s2wc-native-toolbar>.s2wc-toolbar-arrow,
+.s2wc-native-toolbar:hover .s2wc-toolbar-scroll>*,.s2wc-native-toolbar:focus-within .s2wc-toolbar-scroll>*,html.s2wc-toolbar-revealed .s2wc-toolbar-scroll>*{opacity:1;pointer-events:auto}
+html.s2wc-inline-controls:not(.s2wc-native-open) .s2wc-frame{z-index:46!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control.s2wc-dock-visible{visibility:visible!important;opacity:0!important;pointer-events:none!important;transition:opacity .12s ease;box-sizing:border-box!important;overflow:visible!important;border-radius:5px!important}
+html.s2wc-toolbar-revealed:not(.s2wc-native-open) .s2wc-docked-control.s2wc-dock-visible{opacity:1!important;pointer-events:auto!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control.s2wc-dock-outside{visibility:hidden!important;pointer-events:none!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control>.input-label{display:none!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control :is(.input,.select-trigger,.date-picker-trigger),html.s2wc:not(.s2wc-native-open) :is(input,select,button).s2wc-docked-control{min-height:32px!important;height:32px!important;padding:5px 9px!important;font-size:12px!important;line-height:20px!important;border-radius:5px!important;margin:0!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control>.relative{height:32px!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control .select-trigger{width:100%!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-inline-labelled:before{content:attr(data-s2wc-dock-label);position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--wc-text-3);z-index:1;pointer-events:none;white-space:nowrap}
+html.s2wc:not(.s2wc-native-open) .s2wc-inline-labelled .select-trigger{padding-left:var(--s2wc-label-width)!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control input.input{width:100%!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control.usage-filter-dropdown>div.absolute{top:100%!important}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control.usage-filter-dropdown>button.absolute{top:50%!important;transform:translateY(-50%)}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control .date-picker-dropdown{top:100%!important;left:var(--s2wc-popup-shift,0px)!important;right:auto!important;max-width:calc(100vw - 80px)}
+html.s2wc:not(.s2wc-native-open) .s2wc-docked-control .date-picker-input{height:auto!important}
+@media(hover:none){
+  .s2wc-native-toolbar>.s2wc-toolbar-arrow,.s2wc-toolbar-scroll>*{opacity:1;pointer-events:auto}
+  html.s2wc:not(.s2wc-native-open) .s2wc-docked-control.s2wc-dock-visible{opacity:1!important;pointer-events:auto!important}
+}
+@media(prefers-reduced-motion:reduce){.s2wc-toolbar-scroll>*,.s2wc-toolbar-arrow,html.s2wc .s2wc-docked-control{transition:none!important}}

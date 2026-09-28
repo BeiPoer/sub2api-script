@@ -1,0 +1,14 @@
+{
+  "name": "sub2api-wecom",
+  "version": "2.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node --check src/theme.js && node --check src/avatars.js && node --check src/inline-toolbar.js && node --check src/native-tools.js && node --check src/conversations.js && node --check sub2api-wecom.user.js",
+    "test": "node --test tests/theme.test.mjs",
+    "preview": "node scripts/preview.mjs",
+    "preview:native": "node scripts/preview-native.mjs"
+  },
+  "devDependencies": { "jsdom": "^24.1.3" }
+}

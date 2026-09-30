@@ -1,0 +1,41 @@
+sub2api-theme/sub2api-wecom/sub2api-wecom.user.js
+  s_004120160afc66::t_e9d54c49a85a2e 4-8
+  s_004120160afc66::t_b328177cf545d4 295-298,517-551,553,577,587,590,593-598,605-610,657
+  s_004120160afc66::t_1e08490f5bc3dd 552,695
+sub2api-theme/sub2api-wecom/tests/theme.test.mjs
+  s_004120160afc66::t_5a641725519e8e 7
+  s_004120160afc66::t_ee70be79634912 24,29-30,32,37-38,90-92,135,146,311
+  s_004120160afc66::t_99937456aa3beb 154-210
+sub2api-theme/sub2api-wecom/src/meta.txt
+  s_004120160afc66::t_d6661680feea27 4-8
+sub2api-theme/sub2api-wecom/README.md
+  s_004120160afc66::t_0976d441e975ab 5-8,62-64,74,82,145
+  s_004120160afc66::t_d6661680feea27 3-4
+sub2api-theme/sub2api-wecom/src/theme.js
+  s_004120160afc66::t_0600290808ef3a 28
+  s_004120160afc66::t_3b2cb38de8db95 34,42-45,125-126
+sub2api-theme/sub2api-wecom/scripts/preview-native.mjs
+  s_004120160afc66::t_5838c990f6281b 7,55
+sub2api-theme/sub2api-wecom/src/conversations.js
+  s_004120160afc66::t_3b2cb38de8db95 54-71,75,208,287,293,328,367
+  s_004120160afc66::t_3750488251749b 9-12,231-265,267,291,301,304,307-312,319-324,371
+  s_004120160afc66::t_ee70be79634912 266
+sub2api-theme/sub2api-wecom/package.json
+  s_004120160afc66::t_d6661680feea27 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "44d85cc99335aa29d4b8b977f9e4ad5a14e9d36b",
+  "prompts": {},
+  "sessions": {
+    "s_004120160afc66": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f014-9677-7cb2-910c-ab67fff51315",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "beipoer <forczc@foxmail.com>"
+    }
+  }
+}

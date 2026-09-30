@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 let JSDOM;
 try { ({ JSDOM } = createRequire(import.meta.url)('jsdom')); }
-catch { ({ JSDOM } = createRequire(new URL('../../../sub2api/frontend/package.json', import.meta.url))('jsdom')); }
+catch { ({ JSDOM } = createRequire(new URL('../../../../sub2api/frontend/package.json', import.meta.url))('jsdom')); }
 const script = await readFile(new URL('../sub2api-wecom.user.js', import.meta.url), 'utf8');
 const fixture = `<div id="app"><div class="app-layout"><aside class="sidebar w-64"><div class="sidebar-header"><span class="sidebar-brand-title">Test Workspace</span></div><nav class="sidebar-nav"><div class="sidebar-section"><a class="sidebar-link" href="/admin/dashboard">仪表盘</a><a class="sidebar-link" href="/admin/users">用户管理</a><a class="sidebar-link" href="/admin/accounts">账号管理</a><button class="sidebar-link" id="channels">渠道管理</button><a class="sidebar-link" href="/admin/settings">系统设置</a></div><div class="sidebar-section"><a class="sidebar-link" href="/profile">个人资料</a></div></nav><div class="mt-auto"><button id="native-theme">深色模式</button></div></aside><div><header><button><div class="text-left"><div class="text-sm">管理员</div></div></button></header><main><input id="original-input" value="draft"><button id="business-button">保存</button></main></div></div></div>`;
 const settle = async (window) => { await new Promise(r => window.setTimeout(r, 55)); };
@@ -21,19 +21,21 @@ function boot(path='/admin/accounts', html=fixture, stored=null, avatarSeed=null
   w.eval(script);
   return {dom,w,d:w.document,toggle:()=>menu()};
 }
-test('admin-only activation, existing skin restoration, SPA return, no duplicated shell', async()=>{
+test('shared-layout activation, existing skin restoration, SPA return, no duplicated shell', async()=>{
   const {w,d,dom}=boot();try {
     assert(d.documentElement.classList.contains('s2wc'));assert(!d.documentElement.hasAttribute('data-skin'));
     const input=d.querySelector('#original-input');input.value='unsaved changes';
     w.history.pushState({},'','/profile');d.querySelector('header').append('profile');await settle(w);
+    assert(d.documentElement.classList.contains('s2wc'),'the installed skin also supports user routes');
+    d.querySelector('.app-layout').classList.remove('app-layout');await settle(w);
     assert(!d.documentElement.classList.contains('s2wc'));assert.equal(d.documentElement.dataset.skin,'editorial');assert.equal(input.value,'unsaved changes');
-    w.history.pushState({},'','/admin/users');d.querySelector('header').append('users');await settle(w);
+    d.querySelector('#app > div').classList.add('app-layout');w.history.pushState({},'','/admin/users');d.querySelector('header').append('users');await settle(w);
     assert(d.documentElement.classList.contains('s2wc'));assert.equal(d.querySelectorAll('#s2wc-shell').length,1);
     w.eval(script);assert.equal(d.querySelectorAll('#s2wc-shell').length,1);
   } finally{dom.window.close();}
 });
-test('foreign pages and user pages are untouched',()=>{
-  for(const [path,html] of [['/admin/users','<div id="app"><aside>Other product</aside></div>'],['/dashboard',fixture],['/login',fixture]]){
+test('pages without the Sub2API layout are untouched',()=>{
+  for(const [path,html] of [['/admin/users','<div id="app"><aside>Other product</aside></div>'],['/dashboard','<main>Other dashboard</main>'],['/login','<div id="app"><form>Login</form></div>']]){
     const {d,dom}=boot(path,html);try{assert(!d.documentElement.classList.contains('s2wc'));assert(!d.querySelector('#s2wc-shell'));assert.equal(d.documentElement.dataset.skin,'editorial');}finally{dom.window.close();}
   }
 });
@@ -85,9 +87,9 @@ test('middle column contains only native menus; record details remain in the cha
     assert.equal(d.querySelectorAll('.s2wc-im-conv').length,d.querySelectorAll('.sidebar-nav .sidebar-link').length);
     assert(d.querySelector('.s2wc-im-conv[aria-label="群聊：账号管理群"] .is-group'));
     assert.equal(d.querySelectorAll('.s2wc-im-message').length,2);
-    d.querySelector('.s2wc-im-message-actions [aria-label="查看资料"]').click();
-    assert.equal(d.querySelector('.s2wc-im-heading h1').textContent,'Alice');
-    assert.equal(d.querySelectorAll('.s2wc-im-message').length,1);
+    assert(!d.querySelector('.s2wc-im-message-actions [aria-label="查看资料"]'));
+    assert(!d.querySelector('.s2wc-im-message-actions [aria-label="更多操作"]'));
+    assert.equal(d.querySelectorAll('.s2wc-im-message').length,2);
     assert.match(d.querySelector('.s2wc-im-bubble').textContent,/OpenAI/);
     assert.equal(d.querySelector('main input').value,'draft');
     assert.equal(d.querySelector('.s2wc-im-conv[aria-current="true"]').getAttribute('aria-label'),'群聊：账号管理群');
@@ -130,7 +132,7 @@ test('v2 delayed native dialogs open over the chat without exposing the table',a
   }finally{dom.window.close();}
 });
 
-test('record avatars and menu group avatars remain stable across detail switches and reloads',()=>{
+test('record avatars and menu group avatars remain stable across menu selection and reloads',()=>{
   const first=boot('/admin/accounts',tableFixture);
   let savedSeed,src;
   try{
@@ -141,7 +143,7 @@ test('record avatars and menu group avatars remain stable across detail switches
     const group=[...d.querySelectorAll('.s2wc-im-conv[aria-label="群聊：账号管理群"] img')];
     assert.equal(group.length,9);assert.equal(new Set(group.map(e=>e.src)).size,9);
     savedSeed=w.localStorage.getItem('sub2api-wecom-avatar-seed-v1');assert(savedSeed);
-    d.querySelector('.s2wc-im-message-actions [aria-label="查看资料"]').click();
+    d.querySelector('.s2wc-im-conv[aria-label="群聊：账号管理群"]').click();
     assert.equal(d.querySelector('.s2wc-im-message .is-message img').src,src);
   }finally{first.dom.window.close();}
   const second=boot('/admin/accounts',tableFixture,null,savedSeed);
@@ -149,6 +151,63 @@ test('record avatars and menu group avatars remain stable across detail switches
 });
 
 const searchableFixture=tableFixture.replace('<th>操作</th>','<th>备注</th><th>操作</th>').replace('<td>OpenAI</td>','<td>OpenAI</td>').replace('<td>正常</td><td><button aria-label="编辑">编辑</button></td></tr>','<td>正常</td><td>Invoice-987 finance@example.test</td><td><button aria-label="编辑">编辑</button></td></tr>');
+test('account fields beyond the old five-field limit are visible without opening details',()=>{
+  const html=tableFixture.replace('<th>操作</th>','<th>分组</th><th>优先级</th><th>用量</th><th>备注</th><th>操作</th>').replaceAll('<td><button aria-label="编辑">','<td>默认组</td><td>10</td><td>额度 42%</td><td>尾部资料</td><td><button aria-label="编辑">');
+  const {d,dom}=boot('/admin/accounts',html);try{
+    assert.equal(d.querySelectorAll('.s2wc-im-message').length,2);
+    for(const bubble of d.querySelectorAll('.s2wc-im-bubble')){
+      assert.match(bubble.textContent,/额度 42%/);assert.match(bubble.textContent,/尾部资料/);assert.equal(bubble.querySelectorAll('dt').length,7);
+    }
+    assert(!d.querySelector('.s2wc-im-message-actions [aria-label="查看资料"]'));
+    assert(!d.querySelector('.s2wc-im-message-actions [aria-label="更多操作"]'));
+  }finally{dom.window.close();}
+});
+
+test('account query updates the bubble and slow edit dialogs never open a fallback panel',async()=>{
+  const html=tableFixture.replace('<td>正常</td>','<td id="quota">尚未查询<button>查询</button></td>');
+  const {w,d,dom}=boot('/admin/accounts',html);try{
+    let queries=0;d.querySelector('#quota button').onclick=()=>{queries++;d.querySelector('#quota').textContent='额度 80%';};
+    d.querySelector('.s2wc-im-message-actions [aria-label="查询"]').click();await settle(w);
+    assert.equal(queries,1);assert.match(d.querySelector('.s2wc-im-message').textContent,/额度 80%/);assert(!d.documentElement.classList.contains('s2wc-native-open'));
+    d.querySelector('tbody tr button').onclick=()=>w.setTimeout(()=>{const dialog=d.createElement('div');dialog.setAttribute('role','dialog');dialog.textContent='慢速编辑';d.body.append(dialog);},1600);
+    d.querySelector('.s2wc-im-message-actions [aria-label="编辑"]').click();
+    await new Promise(r=>w.setTimeout(r,1700));assert(d.querySelector('[role="dialog"]'));assert(!d.documentElement.classList.contains('s2wc-native-open'));
+  }finally{dom.window.close();}
+});
+
+test('account test opens the live native menu and invokes only the selected account test',async()=>{
+  const html=tableFixture.replaceAll('<button aria-label="编辑">编辑</button>','<button aria-label="编辑">编辑</button><button title="更多" style="color: blue">更多</button>');
+  const {w,d,dom}=boot('/admin/accounts',html);try{
+    const tested=[];let otherActions=0;
+    const wire=()=>d.querySelectorAll('tbody tr').forEach(row=>{row.querySelector('[title="更多"]').onclick=()=>w.queueMicrotask(()=>{
+      const menu=d.createElement('div');menu.className='action-menu-content';
+      const test=d.createElement('button');test.textContent='测试连接';test.onclick=()=>{tested.push(row.cells[1].textContent);menu.remove();const dialog=d.createElement('div');dialog.setAttribute('role','dialog');dialog.textContent=`测试 ${row.cells[1].textContent}`;d.body.append(dialog);};
+      const other=d.createElement('button');other.textContent='用量统计';other.onclick=()=>otherActions++;menu.append(test,other);d.body.append(menu);
+    });});
+    wire();const first=d.querySelector('.s2wc-im-message-actions [aria-label="更多"]');first.click();await settle(w);
+    assert(d.querySelector('.action-menu-content'));assert.equal(tested.length,0);assert(!d.documentElement.classList.contains('s2wc-native-open'));
+    w.addEventListener('keydown',e=>{if(e.key==='Escape')w.queueMicrotask(()=>d.querySelector('.action-menu-content')?.remove());});
+    // A refreshed Vue row must be resolved again, instead of clicking its old node.
+    const row=d.querySelectorAll('tbody tr')[1];row.outerHTML=row.outerHTML;wire();await settle(w);
+    d.querySelectorAll('.s2wc-im-message-actions [aria-label="测试"]')[1].click();await settle(w);
+    assert.deepEqual(tested,['Bob']);assert.equal(otherActions,0);assert.equal(d.querySelector('[role="dialog"]').textContent,'测试 Bob');
+    assert(!d.documentElement.classList.contains('s2wc-native-open'));assert(!d.querySelector('.action-menu-content'));
+    assert.equal(d.querySelector('tbody [title="更多"]').getAttribute('style'),'color: blue');
+  }finally{dom.window.close();}
+});
+
+test('mobile accounts show all fields, honor disabled menu triggers, and retain direct test buttons',()=>{
+  const fields=Array.from({length:7},(_,i)=>`<div data-field="field${i}"><span>${i===0?'名称':`字段${i}`}</span><div>${i===0?'移动账号':`值${i}`}</div></div>`).join('');
+  const html=fixture.replace('<main>',`<main><div class="card"><div>${fields}</div><button disabled>更多</button></div>`);
+  const {d,dom}=boot('/admin/accounts',html);try{
+    assert.match(d.querySelector('.s2wc-im-message').textContent,/值6/);assert(d.querySelector('.s2wc-im-message-actions [aria-label="测试"]').disabled);
+  }finally{dom.window.close();}
+  const direct=boot('/admin/accounts',tableFixture.replace('编辑</button>','测试连接</button>').replace('aria-label="编辑"','aria-label="测试连接"'));try{
+    let tests=0;direct.d.querySelector('tbody button').onclick=()=>tests++;
+    direct.d.querySelector('.s2wc-im-message-actions [aria-label="测试连接"]').click();assert.equal(tests,1);assert(!direct.d.querySelector('.s2wc-im-message-actions [aria-label="测试"]'));
+  }finally{direct.dom.window.close();}
+});
+
 test('generic page search matches all fields, syncs native rows, survives updates, and restores on clear/disable',async()=>{
   const {w,d,dom,toggle}=boot('/admin/accounts',searchableFixture);try{
     const input=d.querySelector('input[aria-label="当前列表搜索"]');
@@ -249,7 +308,7 @@ test('record selection and field actions retain native handlers',async()=>{
   const data=tableFixture.replace('<td>1</td>','<td><input type="checkbox" id="original-check">1</td>').replace('<td>Alice</td>','<td><button title="查看用户详情" id="original-user">Alice</button></td>');
   const {w,d,dom}=boot('/admin/users',data);try{
     let selected=0,opened=0;d.querySelector('#original-check').onchange=()=>selected++;d.querySelector('#original-user').onclick=()=>opened++;
-    assert.match(d.querySelector('.s2wc-im-bubble').textContent,/Alice/);
+    assert.match(d.querySelector('.s2wc-im-message').textContent,/Alice/);
     const proxy=d.querySelector('.s2wc-record-selector input');proxy.click();await settle(w);assert.equal(selected,1);assert(d.querySelector('#original-check').checked);assert.match(d.querySelector('.s2wc-native-selection').textContent,/已选 1/);
     d.querySelector('.s2wc-im-message-actions [aria-label="查看用户详情"]').click();assert.equal(opened,1);
   }finally{dom.window.close();}

@@ -1,6 +1,6 @@
 {
   "name": "sub2api-wecom",
-  "version": "2.3.0",
+  "version": "2.3.10",
   "private": true,
   "type": "module",
   "scripts": {

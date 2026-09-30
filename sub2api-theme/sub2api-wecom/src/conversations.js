@@ -6,6 +6,10 @@ function createConversationUI({ shell, icon, button, getContext, refresh }) {
   let pageQuery='', blocks=[], nativeFiltered=new Set(), bulkGuards=new Map();
   let records = [], routes = [], notes = new Map(), draftByThread = new Map(), nativeOrigin, priorAria = new Map(), pendingModal, modalTimer;
   let nativeTools;
+  let cancelAccountTest;
+  const accountPage=()=>/^\/admin\/accounts\/?$/.test(location.pathname);
+  const moreAction=name=>/^(更多(?:操作)?|more(?: actions?)?)$/i.test(name);
+  const testAction=name=>/^(测试(?:连接)?|test(?: connection)?)$/i.test(name);
   const text = el => (el?.textContent || '').replace(/\s+/g, ' ').trim();
   const node = (tag, cls, value) => { const e = document.createElement(tag); e.className = cls; if (value !== undefined) e.textContent = value; return e; };
   const labelOf = e => e.getAttribute('aria-label') || e.getAttribute('title') || text(e);
@@ -47,10 +51,28 @@ function createConversationUI({ shell, icon, button, getContext, refresh }) {
     result.push({key,name,row,fields,group:false,summary:fields.filter(f=>f!==named).slice(0,3).map(f=>f.value).join(' · ')});
   }
   function readBlocks(main) {
+    const monitorPage=/^\/monitor\/?$/.test(location.pathname);
+    if(monitorPage){
+      const summary=main.querySelector('section.py-3');
+      const channelCards=[...main.querySelectorAll('.grid button.group')];
+      const monitorBlocks=[...(summary?[summary]:[]),...channelCards].map((e,i)=>{
+        const copy=e.cloneNode(true);
+        const timeline=copy.querySelector('[class*="items-end"][class*="h-5"]');
+        if(timeline){
+          const marks=[...timeline.children].filter(bar=>bar.title).map(bar=>bar.classList.contains('bg-emerald-500')?'✔':bar.classList.contains('bg-amber-500')?'⭕':bar.classList.contains('bg-red-500')?'×':'');
+          timeline.textContent=marks.join('');
+        }
+        for(const badge of copy.querySelectorAll('[class*="bg-emerald-100"],[class*="bg-amber-100"],[class*="bg-red-100"]')){
+          badge.textContent=badge.classList.contains('bg-emerald-100')?'✔':badge.classList.contains('bg-amber-100')?'⭕':'×';
+        }
+        return {key:`monitor:${i}`,name:e===summary?'渠道状态':text(e.querySelector('strong,[class*="font-semibold"]'))||`渠道 ${i}`,body:(copy.innerText||plainValue(copy)).trim().slice(0,2000),source:e};
+      }).filter(e=>e.body);
+      if(monitorBlocks.length)return monitorBlocks;
+    }
     let cards=[...main.querySelectorAll('.card, .glass-card, .card-glass')].filter(e=>!e.closest('.table-page-layout') && !e.parentElement.closest('.card,.glass-card,.card-glass'));
     if(!cards.length)cards=[...main.querySelectorAll('[role="list"] > [role="listitem"],ul > li,.grid > article')].filter(e=>!e.closest('nav,table,[role="dialog"]'));
     if(!cards.length && !main.querySelector('table,[data-field],.table-page-layout')) cards=[...main.children];
-    return cards.filter(e=>nativeTools.active(e)&&!nativeTools.hasChart(e)&&!e.querySelector('table,[data-field],input,select,textarea,.select-trigger')).map((e,i)=>({key:`block:${i}`,name:text(e.querySelector('h2,h3,h4,p')) || `信息 ${i+1}`,body:plainValue(e).slice(0,2000),source:e})).filter(e=>e.body);
+    return cards.filter(e=>nativeTools.active(e)&&!nativeTools.hasChart(e)&&!e.querySelector('table,[data-field],input,select,textarea,.select-trigger')).map((e,i)=>({key:`block:${i}`,name:text(e.querySelector('h2,h3,h4,p,strong,[class*="font-semibold"]')) || `信息 ${i+1}`,body:plainValue(e).slice(0,2000),source:e})).filter(e=>e.body);
   }
   const list=node('section','s2wc-im-list'); list.setAttribute('aria-label','会话列表');
   list.innerHTML=`<div class="s2wc-im-list-head"><label class="s2wc-im-search">${icon('search')}<input type="search" aria-label="搜索菜单" placeholder="搜索菜单"></label><button class="s2wc-im-add" type="button" aria-label="打开应用目录">＋</button></div><div class="s2wc-im-list-caption">应用会话</div><div class="s2wc-im-conversations" role="list"></div><div class="s2wc-im-list-foot"></div>`;
@@ -183,7 +205,7 @@ function createConversationUI({ shell, icon, button, getContext, refresh }) {
       const b=node('button','s2wc-im-conv');b.type='button';b.dataset.key=r.key;b.setAttribute('aria-label',`群聊：${r.name}`);
       const isActive=r.path===location.pathname;
       b.classList.toggle('is-active',!!isActive);if(isActive)b.setAttribute('aria-current','true');
-      b.append(avatar(r.name,r.group,'',r.key));
+      b.append(avatar(r.name,r.groupAvatar,'',r.key));
       const info=node('span','s2wc-im-conv-info'),top=node('span','s2wc-im-conv-top');
       top.append(node('span','s2wc-im-conv-name',r.name),node('small','s2wc-im-conv-time',r.group?'群聊':''));
       info.append(top,node('span','s2wc-im-conv-summary',r.summary||'点击查看管理信息'));b.append(info);
@@ -206,6 +228,43 @@ function createConversationUI({ shell, icon, button, getContext, refresh }) {
     content.append(bubble);row.append(content);return {row,content,bubble};
   }
   function actionsFor(record){return [...record.row.querySelectorAll('button,a')].filter(b=>labelOf(b)&&!/复制|copy/i.test(labelOf(b)));}
+  function clickAccountMenu(source,anchor){
+    if(!source?.isConnected||source.disabled||source.getAttribute('aria-disabled')==='true')return;
+    // The native menu reads currentTarget's rectangle synchronously. Anchor it to
+    // the visible action without moving/replacing its Vue-owned trigger.
+    const rect=anchor.getBoundingClientRect(),style=source.getAttribute('style');
+    try{
+      for(const [key,value] of Object.entries({position:'fixed',left:`${rect.left}px`,top:`${rect.top}px`,width:`${rect.width}px`,height:`${rect.height}px`,margin:'0',transform:'none'}))source.style.setProperty(key,value,'important');
+      source.click();
+    }finally{if(style===null)source.removeAttribute('style');else source.setAttribute('style',style);}
+  }
+  function testAccount(key,anchor){
+    cancelAccountTest?.();
+    const record=records.find(r=>r.key===key),trigger=record&&actionsFor(record).find(b=>moreAction(labelOf(b)));
+    if(!trigger||trigger.disabled||trigger.getAttribute('aria-disabled')==='true')return;
+    // Close any previous account menu before waiting for this account's menu.
+    const previous=new Set(document.querySelectorAll('.action-menu-content'));
+    if(previous.size)window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    const status=node('span','s2wc-account-test-status','正在打开测试…');status.setAttribute('role','status');anchor.after(status);
+    const path=location.pathname;
+    let timer,done=false;
+    const finish=()=>{done=true;observer.disconnect();clearTimeout(timer);anchor.disabled=false;if(cancelAccountTest===finish)cancelAccountTest=null;status.textContent='';};
+    const inspect=()=>{
+      if(done)return;
+      if(path!==location.pathname||!trigger.isConnected||!root.classList.contains('s2wc')){finish();return;}
+      const menu=[...document.querySelectorAll('.action-menu-content')].find(e=>!previous.has(e)&&!e.hidden&&getComputedStyle(e).display!=='none');
+      const target=menu&&[...menu.querySelectorAll('button')].find(b=>testAction(labelOf(b)));
+      if(!target)return;
+      const disabled=target.disabled||target.getAttribute('aria-disabled')==='true';
+      finish();
+      if(disabled){status.textContent='当前账号暂不可测试';return;}
+      target.click();refresh();
+    };
+    const observer=new MutationObserver(inspect);cancelAccountTest=finish;anchor.disabled=true;
+    observer.observe(document.body,{childList:true,subtree:true});
+    timer=setTimeout(()=>{finish();status.textContent='未找到测试入口，请从“更多”菜单选择测试连接';},1500);
+    queueMicrotask(()=>{if(!done){clickAccountMenu(trigger,anchor);queueMicrotask(inspect);}});
+  }
   function renderChat(title,blocks) {
     const recordView=isRecordView();
     const picked=records.find(r=>r.key===selected); const ownNotes=notes.get(currentThread())||[];
@@ -219,20 +278,19 @@ function createConversationUI({ shell, icon, button, getContext, refresh }) {
     chat.querySelector('.s2wc-im-count').textContent=picked?'':`（${recordView?records.length:blocks.length}）`;
     chat.querySelector('.s2wc-im-heading p').textContent=picked?`${title} · 联系人资料`:`${title} · 当前页面信息`;
     stream.replaceChildren();
-    stream.append(node('div','s2wc-im-separator',pageQuery.trim()?`搜索结果 · ${records.length?visible.length:visibleBlocks.length} 项` : picked?'联系人资料':`当前页面 · ${records.length ? `${records.length} 条记录`:'信息同步'}`));
     if(recordView&&visibleBlocks.length&&!picked){
       const summary=node('details','s2wc-stat-summary');summary.append(node('summary','','会话摘要'));
       for(const b of visibleBlocks)summary.append(node('p','',b.body));stream.append(summary);
     }
     if(visible.length){
       for(const r of visible){
-        const details=node('div','s2wc-im-record');details.append(node('strong','s2wc-im-record-title',r.name));
+        const details=node('div','s2wc-im-record');
         const primary=r.fields.filter(f=>!/名称|username|^name$/i.test(f.label));
         const priorities=/\/usage(?:\/|$)/.test(location.pathname)?['模型','Token','费用','延迟','时间','用户','状态码','响应内容','类型']:[];
         const ordered=priorities.length?[...primary].sort((a,b)=>(priorities.indexOf(a.label)<0?99:priorities.indexOf(a.label))-(priorities.indexOf(b.label)<0?99:priorities.indexOf(b.label))):primary;
-        const showFields=picked?primary:ordered.slice(0,5);
+        const showFields=picked||accountPage()?primary:ordered.slice(0,5);
         const fields=node('dl','s2wc-im-fields');
-        for(const f of showFields){fields.append(node('dt','',f.label),node('dd','',f.value));}
+        for(const f of showFields){const pair=node('div','s2wc-im-field');pair.append(node('dt','',f.label),node('dd','',f.value));fields.append(pair);}
         details.append(fields);
         const msg=message(r.name,details,{identity:r.key}); const tools=node('div','s2wc-im-message-actions');
         const nativeCheck=r.row.querySelector('input[type="checkbox"]');
@@ -240,24 +298,34 @@ function createConversationUI({ shell, icon, button, getContext, refresh }) {
           const control=node('label','s2wc-record-selector');const check=document.createElement('input');check.type='checkbox';check.checked=nativeCheck.checked;check.disabled=nativeCheck.disabled||nativeCheck.classList.contains('s2wc-search-bulk-guard');check.setAttribute('aria-label',`选择记录：${r.name}`);
           check.onchange=()=>{const live=records.find(item=>item.key===r.key)?.row.querySelector('input[type="checkbox"]');if(live&&!live.disabled&&!live.classList.contains('s2wc-search-bulk-guard'))live.click();refresh();};control.append(check,document.createTextNode('选择'));tools.append(control);
         }
-        if(!picked){const more=button('查看资料','users',()=>choose(r.key),'s2wc-im-inline');tools.append(more);}
+        if(!picked&&!accountPage()){const more=button('查看资料','users',()=>choose(r.key),'s2wc-im-inline');tools.append(more);}
         const offered=new Set();
         for(const action of actionsFor(r)){
-          const name=labelOf(action);if(offered.has(name)||name.length>60||/^(更多|more)$/i.test(name))continue;offered.add(name);
+          const name=labelOf(action);if(offered.has(name)||name.length>60||(!accountPage()&&moreAction(name)))continue;offered.add(name);
           const actionButton=button(name,/删除|delete|移除|撤销/i.test(name)?'close':'settings',()=>{
             const live=records.find(item=>item.key===r.key);if(!live)return;
-            const target=actionsFor(live).find(b=>labelOf(b)===name);if(!target||target.disabled)return;
+            const target=actionsFor(live).find(b=>labelOf(b)===name);if(!target||target.disabled||target.getAttribute('aria-disabled')==='true')return;
+            if(accountPage()){
+              if(moreAction(name))clickAccountMenu(target,actionButton);
+              else target.click();
+              refresh();return;
+            }
             // Open the original record surface for inline menus, links, and switches.
             if(/编辑|edit|详情|detail|查看|测试|test/i.test(name))invoke(target,{modal:true});
             else{openNative(live.row);target.click();}
           },`s2wc-im-inline${/删除|delete|移除|撤销/i.test(name)?' s2wc-row-action-danger':''}`);
           actionButton.disabled=action.disabled||action.getAttribute('aria-disabled')==='true';tools.append(actionButton);
         }
-        tools.append(button('更多操作','chevron',()=>openNative(records.find(item=>item.key===r.key)?.row),'s2wc-im-inline'));
+        if(accountPage()){
+          const menu=actionsFor(r).find(b=>moreAction(labelOf(b)));
+          if(menu&&!actionsFor(r).some(b=>testAction(labelOf(b)))){
+            const test=button('测试','play',()=>testAccount(r.key,test),'s2wc-im-inline');test.disabled=menu.disabled||menu.getAttribute('aria-disabled')==='true';tools.prepend(test);
+          }
+        }else tools.append(button('更多操作','chevron',()=>openNative(records.find(item=>item.key===r.key)?.row),'s2wc-im-inline'));
         msg.content.append(tools);stream.append(msg.row);
       }
     }else if(visibleBlocks.length && !recordView){
-      for(const b of visibleBlocks){const msg=message(b.name,b.body);if(b.source.querySelector('button,input,select,textarea,a'))msg.content.append(button('打开操作','panel',()=>openNative(b.source),'s2wc-im-inline'));stream.append(msg.row);}
+      for(const b of visibleBlocks){const msg=message(b.name,b.body);if(b.source.matches('button,a,input,select,textarea')||b.source.querySelector('button,input,select,textarea,a'))msg.content.append(button('打开操作','panel',()=>openNative(b.source),'s2wc-im-inline'));stream.append(msg.row);}
     }else if(pageQuery.trim()){
       stream.append(node('p','s2wc-im-empty','当前已加载内容中没有匹配项。可清空搜索，或通过原页搜索、分页查找其他数据。'));
     }else if(recordView){
@@ -296,10 +364,11 @@ function createConversationUI({ shell, icon, button, getContext, refresh }) {
     nativeTools.sync(records);
     blocks=readBlocks(main);
     if(selected&&!records.some(r=>r.key===selected))selected='';
-    routes=sidebarItems().map(source=>{const path=linkPath(source),name=text(source);return {key:`group:${path||name}`,name:`${name}群`,summary:`${name} · ${source.tagName==='BUTTON'?'展开子菜单':path===location.pathname?'当前会话':'点击进入'}`,source,path,group:true,kind:path?classify(path):/渠道|channel/i.test(name)?'services':'finance'};});
+    routes=sidebarItems().map((source,index)=>{const path=linkPath(source),name=text(source);return {key:`group:${path||name}`,name:`${name}群`,summary:`${name} · ${source.tagName==='BUTTON'?'展开子菜单':path===location.pathname?'当前会话':'点击进入'}`,source,path,group:true,groupAvatar:index%3!==1,kind:path?classify(path):/渠道|channel/i.test(name)?'services':'finance'};});
     syncPageSearch();renderList();renderChat(title,blocks);
   }
   function deactivate(){
+    cancelAccountTest?.();
     nativeTools.restore();
     clearNativeFiltering();
     clearTimeout(modalTimer);pendingModal=null;

@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-const frontend = process.env.SUB2API_FRONTEND || fileURLToPath(new URL('../../../sub2api/frontend/', import.meta.url));
+const frontend = process.env.SUB2API_FRONTEND || fileURLToPath(new URL('../../../../sub2api/frontend/', import.meta.url));
 const require = createRequire(path.join(frontend, 'package.json'));
 process.chdir(frontend); // Tailwind's existing relative content/config paths belong to the source app.
 const { createServer } = await import(pathToFileURL(path.join(path.dirname(require.resolve('vite/package.json')), 'dist/node/index.js')).href);
@@ -52,6 +52,7 @@ const server = await createServer({
         else if (p === '/admin/dashboard/snapshot-v2') data={trend:[{date:'2026-09-28',requests:43,input_tokens:51600,output_tokens:12900,tokens:64500,total_cost:1.29}],groups:[],models};
         else if (/\/admin\/ops\/(request-errors|errors|upstream-errors)$/.test(p)) data={items:[],total:0,page:1,page_size:20};
         else if (p === '/admin/accounts') data={items:records,total:records.length,page:1,page_size:20,pages:1};
+        else if (/^\/admin\/accounts\/\d+\/models$/.test(p)) data=[{id:'preview-model',display_name:'本地模拟模型',type:'model'}];
         else if (/^\/admin\/accounts\/\d+$/.test(p)) data=records.find(r=>r.id===Number(p.split('/').pop())) || {};
         else if (p.includes('upstream-billing-rates')) data={items:[],rates:{}};
         else if (p.includes('/groups') || p.includes('/proxies') || p.includes('/subscriptions') || p.includes('/announcements')) data=p.endsWith('/all')||p.includes('subscriptions')?[]:{items:[],total:0,pages:0};

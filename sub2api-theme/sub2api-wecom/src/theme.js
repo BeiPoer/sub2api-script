@@ -25,12 +25,13 @@ if (document.getElementById('app') && !document.getElementById('s2wc-style')) {
     compact: '<path d="M4 5h16M4 10h16M4 15h16M4 20h16"/>',
     restore: '<path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/>',
   };
+  paths.play = '<path d="m8 5 11 7-11 7z"/>';
   const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.grid}</svg>`;
   let prefs = { enabled: true, compact: false, panel: true };
   try { const p = JSON.parse(localStorage.getItem(KEY)); for (const k of Object.keys(prefs)) if (typeof p?.[k] === 'boolean') prefs[k] = p[k]; } catch { /* Storage may be unavailable. */ }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch { /* Session-only fallback. */ } };
   const style = document.createElement('style');
-  style.id = 's2wc-style'; style.textContent = THEME_CSS;
+  style.id = 's2wc-style'; style.textContent = `${THEME_CSS}\n.s2wc-im-message{width:min(92%,760px);max-width:760px}.s2wc-im-message-content{flex:1;min-width:0}.s2wc-im-bubble{border-radius:9px}.s2wc-im-fields{display:flex;flex-wrap:wrap;gap:5px 16px;max-width:620px}.s2wc-im-field{display:flex;gap:5px;min-width:0}.s2wc-im-field dt{white-space:nowrap}.s2wc-im-field dd{overflow-wrap:anywhere}`;
   (document.head || ROOT).append(style);
   let shell, palette, conversations, active = false, sidebar, header, frame, category = 'all', previousPath = '', signature = '';
   let priorSkin = null, skinCaptured = false, pending = false, searchOrigin, frameRequest = 0;
@@ -38,10 +39,10 @@ if (document.getElementById('app') && !document.getElementById('s2wc-style')) {
   const setText = (el, value) => { if (el && el.textContent !== value) el.textContent = value; };
   const classify = (href) => {
     const path = new URL(href, location.href).pathname;
-    if (/^\/admin\/(users|groups)(\/|$)/.test(path)) return 'people';
-    if (/^\/admin\/(accounts|channels|proxies|plugins)(\/|$)/.test(path)) return 'services';
-    if (/^\/admin\/(orders|subscriptions|redeem|promo-codes|affiliates)(\/|$)/.test(path)) return 'finance';
-    if (/^\/admin\/(dashboard|ops|usage|audit-logs)(\/|$)/.test(path)) return 'insights';
+    if (/^\/admin\/(users|groups)(\/|$)/.test(path) || /^\/profile(?:\/|$)/.test(path)) return 'people';
+    if (/^\/admin\/(accounts|channels|proxies|plugins)(\/|$)/.test(path) || /^\/(keys|batch-image|image-generation|available-channels)(\/|$)/.test(path)) return 'services';
+    if (/^\/admin\/(orders|subscriptions|redeem|promo-codes|affiliates)(\/|$)/.test(path) || /^\/(subscriptions|purchase|orders|redeem|affiliate|payment)(\/|$)/.test(path)) return 'finance';
+    if (/^\/admin\/(dashboard|ops|usage|audit-logs)(\/|$)/.test(path) || /^\/(dashboard|usage|monitor)(\/|$)/.test(path)) return 'insights';
     return 'system';
   };
   const nativeLinks = () => [...(sidebar?.querySelectorAll('.sidebar-nav a[href]') || [])].filter(a => {
@@ -121,8 +122,8 @@ if (document.getElementById('app') && !document.getElementById('s2wc-style')) {
     pending = false;
     const layout = document.querySelector('#app .app-layout');
     const candidate = layout?.querySelector('aside.sidebar');
-    // Narrow runtime fingerprint: admin route + actual Sub2API structural classes + admin links.
-    const matches = /^\/admin(?:\/|$)/.test(location.pathname) && candidate?.querySelector('.sidebar-nav a[href^="/admin/"]') && layout.querySelector('main') && layout.querySelector('header');
+    // Sub2API shares this layout across admin and user routes.
+    const matches = candidate?.querySelector('.sidebar-nav a[href], .sidebar-nav button.sidebar-link') && layout.querySelector('main') && layout.querySelector('header');
     if (!prefs.enabled || !matches) { restore(); return; }
     sidebar = candidate; header = layout.querySelector('header'); frame = header.parentElement;
     if (!shell) createShell();

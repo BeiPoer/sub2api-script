@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub2API 运维工具箱
 // @namespace    https://github.com/Wei-Shaw/sub2api
-// @version      0.1.6
+// @version      0.1.7
 // @updateURL    https://raw.githubusercontent.com/BeiPoer/sub2api-script/main/sub2api-model-toolbox.user.js
 // @downloadURL  https://raw.githubusercontent.com/BeiPoer/sub2api-script/main/sub2api-model-toolbox.user.js
 // @description  在 Sub2API 管理员页面测试 API Key 上游账号，并自动展示账号配置的模型
@@ -484,7 +484,9 @@
     const body = response.responseText || ''
     if (status < 200 || status >= 300) {
       const parsed = parseResponseBody(body, response.responseHeaders)
-      throw new Error(`上游返回 ${status || '未知状态'}${extractError(parsed) ? `：${extractError(parsed)}` : ''}`)
+      const error = new Error(`上游返回 ${status || '未知状态'}${extractError(parsed) ? `：${extractError(parsed)}` : ''}`)
+      error.responseText = body
+      throw error
     }
     return parseResponseBody(body, response.responseHeaders)
   }
@@ -589,7 +591,7 @@
         name: asString(account.name) || `账号 ${account.id}`,
         protocol: connection.protocol,
         ok: !error,
-        text: displayBody(response),
+        text: error ? JSON.stringify(response, null, 2) : displayBody(response),
         error,
         latency: Math.round(performance.now() - started)
       }
@@ -599,7 +601,7 @@
         name: asString(account.name) || `账号 ${account.id}`,
         protocol: '未发送',
         ok: false,
-        text: '',
+        text: typeof error?.responseText === 'string' ? error.responseText : '',
         error: error instanceof Error ? error.message : String(error),
         latency: Math.round(performance.now() - started)
       }
@@ -1018,18 +1020,55 @@
     const models = Object.entries(mapping)
       .filter(([model, target]) => model.trim() && typeof target === 'string')
       .map(([model]) => model)
-    return models.join('、')
+    return models
+  }
+
+  function modelTestButton(account, model) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.textContent = '▷'
+    button.title = `测试 ${model}`
+    button.setAttribute('aria-label', button.title)
+    button.style.cssText = 'padding:0 3px;margin-left:3px;border:0;background:transparent;color:inherit;font-size:13px;line-height:1.5;cursor:pointer'
+    button.addEventListener('click', async (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (button.disabled) return
+      button.disabled = true
+      button.textContent = '…'
+      button.style.color = ''
+      button.title = `正在测试 ${model}…`
+      button.setAttribute('aria-label', button.title)
+      try {
+        const upstreamModel = asString(asRecord(asRecord(account.credentials).model_mapping)[model]) || model
+        if (upstreamModel.includes('*')) throw new Error('通配符不能直接测试，请在工具箱中输入具体模型名进行测试')
+        const result = await testOne(account, upstreamModel)
+        button.textContent = result.ok ? '✓' : '✕'
+        button.style.color = result.ok ? '#16a34a' : '#dc2626'
+        button.title = result.ok
+          ? `${model} 测试通过（${result.latency} ms），点击重新测试`
+          : `${model} 测试失败\n${result.error}\n${result.text}`.trim()
+      } catch (error) {
+        button.textContent = '✕'
+        button.style.color = '#dc2626'
+        button.title = `${model} 测试失败\n${error instanceof Error ? error.message : String(error)}`
+      } finally {
+        button.disabled = false
+        button.setAttribute('aria-label', button.title)
+      }
+    })
+    return button
   }
 
   async function ensureAccountModels() {
     if (!accountModelSession) {
-      const session = { models: new Map() }
+      const session = { accounts: new Map() }
       accountModelSession = session
       try {
         // shortcut: 每次进入页面读取一次配置，页内编辑模型后需刷新页面更新展示。
         const accounts = await listAccounts(false, true)
         if (accountModelSession !== session) return
-        session.models = new Map(accounts.map((account) => [String(account.id), configuredModels(account)]))
+        session.accounts = new Map(accounts.map((account) => [String(account.id), account]))
       } catch (error) {
         console.warn('[Sub2API 运维工具箱] 读取账号模型失败', error)
         return
@@ -1038,25 +1077,34 @@
     for (const table of document.querySelectorAll('table')) {
       const headers = [...table.querySelectorAll('thead th')].map((cell) => cell.textContent.trim())
       const nameIndex = headers.findIndex((name) => /^(名称|账号名称|Name|Account Name)$/i.test(name))
-      const idIndex = headers.findIndex((name) => /^ID$/i.test(name))
+      const idIndex = headers.findIndex((name) => /^(ID|账号ID|Account ID)$/i.test(name))
       if (nameIndex < 0) continue
       for (const row of table.querySelectorAll('tbody tr')) {
         const target = row.cells[nameIndex]
         if (!target) continue
         const id = row.dataset.rowId || row.cells[idIndex]?.textContent.trim().replace(/^#/, '')
-        const text = accountModelSession.models.get(id)
+        const account = accountModelSession.accounts.get(id)
+        const models = account ? configuredModels(account) : []
         let label = target.querySelector('[data-sub2api-models]')
-        if (!text) {
+        if (!models.length) {
           label?.remove()
           continue
         }
         if (!label) {
           label = document.createElement('div')
           label.dataset.sub2apiModels = 'true'
-          label.style.cssText = 'margin-top:4px;max-width:360px;white-space:normal;overflow-wrap:anywhere;font-size:11px;line-height:1.5;opacity:.75'
+          label.style.cssText = 'display:flex;flex-wrap:wrap;gap:2px 8px;margin-top:4px;max-width:360px;white-space:normal;overflow-wrap:anywhere;font-size:11px;line-height:1.5'
           target.appendChild(label)
         }
-        if (label.textContent !== text) label.textContent = text
+        if (label.dataset.accountId === id) continue
+        label.dataset.accountId = id
+        label.replaceChildren()
+        for (const model of models) {
+          const item = document.createElement('span')
+          item.textContent = model
+          item.appendChild(modelTestButton(account, model))
+          label.appendChild(item)
+        }
       }
     }
   }

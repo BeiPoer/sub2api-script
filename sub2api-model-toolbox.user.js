@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Sub2API 运维工具箱
 // @namespace    https://github.com/Wei-Shaw/sub2api
-// @version      0.1.4
+// @version      0.1.6
 // @updateURL    https://raw.githubusercontent.com/BeiPoer/sub2api-script/main/sub2api-model-toolbox.user.js
 // @downloadURL  https://raw.githubusercontent.com/BeiPoer/sub2api-script/main/sub2api-model-toolbox.user.js
-// @description  在 Sub2API 管理员页面直接测试 API Key 上游账号
+// @description  在 Sub2API 管理员页面测试 API Key 上游账号，并自动展示账号配置的模型
 // @author       sub2api contributors
 // @match        http://*/*
 // @match        https://*/*
@@ -43,6 +43,7 @@
   let elements = null
   let accountPageObserver = null
   let accountPageAccounts = []
+  let accountModelSession = null
 
   const CSS = String.raw`
     :host { all: initial; }
@@ -605,12 +606,13 @@
     }
   }
 
-  async function listAccounts(filterGroup = true) {
+  async function listAccounts(filterGroup = true, allTypes = false) {
     const accounts = []
     let page = 1
     let pages = 1
     do {
-      const params = { type: 'apikey', page: String(page), page_size: String(PAGE_SIZE), sort_by: 'name', sort_order: 'asc' }
+      const params = { page: String(page), page_size: String(PAGE_SIZE), sort_by: 'name', sort_order: 'asc' }
+      if (!allTypes) params.type = 'apikey'
       if (filterGroup && state.groupId) params.group = state.groupId
       const payload = asRecord(await adminGet('/admin/accounts', params))
       const items = Array.isArray(payload.items) ? payload.items : []
@@ -1002,8 +1004,61 @@
   function syncRoute() {
     if (isAdminRoute() && looksLikeSub2API()) ensureHost()
     else removeHost()
+    if (host && /^\/admin\/accounts\/?$/i.test(window.location.pathname)) ensureAccountModels()
+    else {
+      accountModelSession = null
+      document.querySelectorAll('[data-sub2api-models]').forEach((node) => node.remove())
+    }
     if (state.quickEnabled && isAdminRoute() && /\/admin\/accounts(?:\/|$)/i.test(window.location.pathname)) ensureAccountPageButtons()
     else removeAccountPageButtons()
+  }
+
+  function configuredModels(account) {
+    const mapping = asRecord(asRecord(account.credentials).model_mapping)
+    const models = Object.entries(mapping)
+      .filter(([model, target]) => model.trim() && typeof target === 'string')
+      .map(([model]) => model)
+    return models.join('、')
+  }
+
+  async function ensureAccountModels() {
+    if (!accountModelSession) {
+      const session = { models: new Map() }
+      accountModelSession = session
+      try {
+        // shortcut: 每次进入页面读取一次配置，页内编辑模型后需刷新页面更新展示。
+        const accounts = await listAccounts(false, true)
+        if (accountModelSession !== session) return
+        session.models = new Map(accounts.map((account) => [String(account.id), configuredModels(account)]))
+      } catch (error) {
+        console.warn('[Sub2API 运维工具箱] 读取账号模型失败', error)
+        return
+      }
+    }
+    for (const table of document.querySelectorAll('table')) {
+      const headers = [...table.querySelectorAll('thead th')].map((cell) => cell.textContent.trim())
+      const nameIndex = headers.findIndex((name) => /^(名称|账号名称|Name|Account Name)$/i.test(name))
+      const idIndex = headers.findIndex((name) => /^ID$/i.test(name))
+      if (nameIndex < 0) continue
+      for (const row of table.querySelectorAll('tbody tr')) {
+        const target = row.cells[nameIndex]
+        if (!target) continue
+        const id = row.dataset.rowId || row.cells[idIndex]?.textContent.trim().replace(/^#/, '')
+        const text = accountModelSession.models.get(id)
+        let label = target.querySelector('[data-sub2api-models]')
+        if (!text) {
+          label?.remove()
+          continue
+        }
+        if (!label) {
+          label = document.createElement('div')
+          label.dataset.sub2apiModels = 'true'
+          label.style.cssText = 'margin-top:4px;max-width:360px;white-space:normal;overflow-wrap:anywhere;font-size:11px;line-height:1.5;opacity:.75'
+          target.appendChild(label)
+        }
+        if (label.textContent !== text) label.textContent = text
+      }
+    }
   }
 
   function removeAccountPageButtons() {
@@ -1056,6 +1111,7 @@
 
   const observer = new MutationObserver(() => {
     if ((isAdminRoute() && !host) || (!isAdminRoute() && host)) scheduleSync()
+    else if (accountModelSession) ensureAccountModels()
   })
   observer.observe(document.documentElement, { childList: true, subtree: true })
 
